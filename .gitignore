@@ -12,12 +12,18 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data — raw is immutable and never committed; everything downstream regenerates from it
-data/raw/
-data/interim/
-data/processed/
-!data/sample/
-!**/.gitkeep
+# Data — raw is immutable and never committed; everything downstream regenerates from it.
+# Directory contents are ignored but the .gitkeep files are not, so the tree exists on a
+# clean checkout and the pipeline has somewhere to write on first run.
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/cache/
+data/raw/cache/*
+!data/raw/cache/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
 
 # OS / editor
 .DS_Store

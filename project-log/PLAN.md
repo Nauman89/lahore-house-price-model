@@ -133,7 +133,7 @@ pass. Every stage closes with a handoff message written for the next chat.
 
 | # | Stage | Planned | Milestone | Actual | Variance | Effort |
 |---|---|---|---|---|---|---|
-| 0 | Planning & setup | 1d | Thu 3 Sep | | | |
+| 0 | Planning & setup | 1d | Thu 3 Sep | 1d — done 2 Sep | −1d | as planned |
 | 1 | Acquisition | 3d | Tue 8 Sep | | | |
 | 2 | Cleaning | 2d | Thu 10 Sep | | | |
 | 3 | EDA | 2d | Mon 14 Sep | | | |
@@ -239,7 +239,9 @@ processed data from raw. Sample data ships so the notebooks run without the full
 
 ## 11. Source selection
 
-Deferred to stage 0/1. Evaluated from scratch; no source is carried over from prior work.
+**Stage 1 work.** Evaluated from scratch; no source is carried over from prior work. Stage 0
+closes without a source selected — selecting one is the first activity of the acquisition
+stage, and its own chat.
 
 **Division of labour:** Claude produces a shortlist of candidate sites and the specific
 clauses and robots.txt paths to check. **Nauman visits the sites and reports what the terms
