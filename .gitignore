@@ -1,0 +1,25 @@
+# Environments
+.venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data — raw is immutable and never committed; everything downstream regenerates from it
+data/raw/
+data/interim/
+data/processed/
+!data/sample/
+!**/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

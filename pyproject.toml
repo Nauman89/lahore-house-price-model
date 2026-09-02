@@ -1,0 +1,56 @@
+[project]
+name = "lahore-house-price-model"
+version = "0.1.0"
+description = "Asking-price prediction for residential houses in Lahore, from listing acquisition through to a deployed estimator."
+authors = [{ name = "Nauman Rasheed", email = "naumanrasheed1989@gmail.com" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13,<3.14"
+
+dependencies = [
+    # Acquisition
+    "requests>=2.32",
+    "beautifulsoup4>=4.13",
+    "lxml>=5.3",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    # Data
+    "pandas>=2.2",
+    "numpy>=2.1",
+    # Modelling
+    "scikit-learn>=1.5",
+    "lightgbm>=4.5",
+    "xgboost>=2.1",
+    "catboost>=1.2.7",
+    "optuna>=4.0",
+    "shap>=0.46",
+    "joblib>=1.4",
+    # Presentation
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "streamlit>=1.40",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29",
+    "jupyterlab>=4.3",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*" = ["D"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
