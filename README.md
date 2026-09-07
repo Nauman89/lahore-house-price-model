@@ -3,7 +3,7 @@
 Predicting the asking price of residential houses in Lahore from listing features —
 acquisition, cleaning, analysis, modelling and a deployed price estimator.
 
-> **Project status: Stage 0 of 8 — Planning & setup.**
+> **Project status: Stage 1 of 8 — Acquisition complete.**
 > Delivery target: 24 September 2026. Stages are tagged as they complete
 > (`v0.1-acquisition`, `v0.2-cleaning`, …).
 
@@ -24,11 +24,25 @@ not predict sale price. Listing prices in Pakistan routinely sit above achievabl
 no public registry of transaction prices is available. This is a genuine limitation of the
 data, not of the method, and results should be read accordingly.
 
+Two further limitations, both established during acquisition and both worth knowing before
+reading any number this project produces.
+
+**The data is a twelve-month window, not current.** 8,459 listings posted between 2 September
+2023 and 14 September 2024. The source stopped recording structured location and coordinates
+on listings posted after roughly September 2024, and its posting volume collapsed around the
+same time, so a more recent window is not available at usable quality. The model therefore
+predicts asking price *as listed during that window*. Applying it to today's market
+extrapolates beyond the training period, in an economy where that matters.
+
+**One source, and a small one.** All listings come from a single Pakistani portal. Any bias in
+who lists there — which societies, which price brackets, which kinds of seller — is inherited
+whole. The findings describe that portal's Lahore inventory, not the Lahore market.
+
 ## Approach
 
 | Stage | What it does |
 |---|---|
-| Acquisition | Scrapes public house listings for Lahore, caching every page fetched |
+| Acquisition | Scrapes public house listings for Lahore, caching every page fetched — **complete**: 8,459 houses, 99.89% coverage, 99.17% field accuracy on a manual audit |
 | Cleaning | Reconciles, deduplicates and validates listings into an analysis-ready table |
 | EDA | Establishes the distributions, anomalies and relationships that drive feature choices |
 | Feature engineering | Builds features traced to EDA findings, with leakage checked explicitly |

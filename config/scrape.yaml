@@ -1,0 +1,101 @@
+# Acquisition settings — Lahore residential house price model.
+#
+# Source selection, the grades every candidate received, and the reasoning behind
+# using the discovery endpoint at all: project-log/decisions/02-acquisition.md.
+# Evidence and verbatim robots.txt / terms: notes/source-evaluation.md.
+
+source:
+  name: ilaan
+
+  # DISCOVERY ONLY (D-21). This endpoint supplies listing IDs and nothing else.
+  # Every modelled field is parsed from the public listing pages below, which
+  # robots.txt permits without qualification.
+  api_base: https://npi.ilaan.com/api/properties-new/v2
+
+  # Ilaan's router resolves on the segment after "-pid" and accepts the numeric
+  # propertyId as well as the opaque code its own links use (verified 5 Sep 2026).
+  # The slug is cosmetic; a descriptive one keeps our requests legible in their logs.
+  listing_url_template: https://www.ilaan.com/house-for-sale/{slug}-pid{property_id}
+
+# Scope: Lahore, residential houses, for sale (PLAN section 3, D-02).
+# cityId 1 is Lahore. The API does not echo property type back in the record, and its
+# type filter is leaky: 4 of 40 sampled pages came back type="Land" despite type=House.
+# parse.py therefore re-verifies type, status and city from the listing page itself.
+query:
+  cityId: 1
+  search: Lahore
+  type: House
+  status: ForSale
+  areaUnit: Marla
+
+discovery:
+  # Their API reported responseTimeMs 3313 for a single record with queryCount 8.
+  # Keep pages modest: a large page size is a heavier query for them, not a lighter one.
+  page_size: 50
+  # Guard, not a target. Discovery stops on hasMore=false; this only bounds a
+  # runaway walk if the source misreports pagination.
+  max_pages: 400
+
+fetch:
+  # Names the project, the repository and a contact address so the operator can
+  # identify this traffic and object to it.
+  user_agent: >-
+    lhp-scraper/0.1 (Lahore house price model;
+    +https://github.com/Nauman89/lahore-house-price-model;
+    naumanrasheed1989@gmail.com)
+  min_delay: 1.0
+  max_delay: 2.0
+  # Generous, because their backend is slow and has been returning 502s.
+  timeout: 60.0
+  max_retries: 3
+  backoff_base: 2.0
+
+paths:
+  cache_dir: data/raw/cache
+  log_path: data/raw/requests.jsonl
+  discovery_output: data/raw/discovery.jsonl
+
+# Fetch window. Discovery returned 20,000 listings spanning Nov 2022 - Sep 2026;
+# Ilaan's posting volume collapsed after mid-2024, so there is no window that is both
+# recent and large enough. Counts below are exact against dates read off real pages:
+#
+#   id >= 697397  (2024-09-14)    1,500 listings   - below the floor after dedup
+#   id >= 658982  (2024-05-24)    4,500
+#   id >= 614378  (2023-12-28)    7,500
+#   id >= 556159  (2023-09-02)   10,500
+#   id >= 530578  (2023-06-23)   13,500
+#   id >= 487526  (2023-02-17)   16,500
+#   id >= 435647  (2022-11-02)   20,000
+#
+# The window also has a CEILING, which is the more important of the two. Measured over 145
+# parsed pages, structured location collapses on listings above id ~700000:
+#
+#   id band            created        locality   lat/lng
+#   796084-700000      2024-10..2026-09     1%        2%
+#   700000-660000      2024-06..2024-09   100%      100%
+#   660000-600000      2023-12..2024-05   100%      100%
+#   600000-540000      2023-07..2023-11   100%      100%
+#   540000-435000      2022-11..2023-07   100%      100%
+#
+# Ilaan appears to have changed its posting flow in late 2024: newer listings carry only a
+# free-text address, no locality and no coordinates. Location is the dominant price driver
+# in Lahore (PLAN section 12), so those listings cannot support the model. Excluding them
+# is a documented exclusion, not a silent drop - parse.py still emits them with a reason.
+#
+# The selected window is therefore 556159..697397: about 9,000 listings dated 2023-09 to
+# 2024-09, a ~12-month span with 100% locality and 100% coordinates. A tighter and more
+# coherent cross-section than any wider window would give.
+#
+# Widening later costs only the additional pages: everything already fetched is cached.
+scope:
+  city: Lahore
+  property_type: House
+  market_status: ForSale
+  min_property_id: 556159
+  max_property_id: 697397
+
+# PLAN section 8, as amended 5 Sep: the band matters more than the target.
+# Above the floor, data quality outranks quantity.
+stopping:
+  target_listings: 10000
+  floor: 3000

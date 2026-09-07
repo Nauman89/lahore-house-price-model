@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Asking-price prediction for residential houses in Lahore, from listing acquisition through to a deployed estimator."
 authors = [{ name = "Nauman Rasheed", email = "naumanrasheed1989@gmail.com" }]
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.13,<3.14"
 
 dependencies = [
@@ -14,6 +15,10 @@ dependencies = [
     "lxml>=5.3",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
+    # RFC 9309-compliant robots.txt parser. Not urllib.robotparser: the stdlib
+    # parser silently discards duplicate "User-agent: *" groups and resolves
+    # conflicts by file order rather than longest match. See tests/test_fetch.py.
+    "protego>=0.3",
     # Data
     "pandas>=2.2",
     "numpy>=2.1",
@@ -31,12 +36,24 @@ dependencies = [
     "streamlit>=1.40",
 ]
 
+[build-system]
+# Without this table uv treats the project as "virtual": it installs the
+# dependencies but never installs lhp itself, so `import lhp` fails. Added
+# 5 Sep 2026 when fetch.py became the first module anything imported.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [dependency-groups]
 dev = [
     "ipykernel>=6.29",
     "jupyterlab>=4.3",
     "ruff>=0.8",
+    "pytest>=8.3",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.ruff]
 line-length = 100
@@ -51,6 +68,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "notebooks/*" = ["D"]
+"tests/*" = ["D"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

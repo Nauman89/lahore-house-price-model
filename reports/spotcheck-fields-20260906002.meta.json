@@ -1,0 +1,21 @@
+{
+  "seed": 20260906002,
+  "drawn_at": "2026-09-06T14:18:07+00:00",
+  "corpus_rows_in_scope": 8459,
+  "sampled": 30,
+  "fields_checked": [
+    "price",
+    "area",
+    "area_unit",
+    "bedrooms",
+    "bathrooms",
+    "locality",
+    "address",
+    "latitude",
+    "longitude",
+    "year_built",
+    "condition",
+    "created_at"
+  ],
+  "denominator": 360
+}

@@ -29,3 +29,15 @@ data/processed/*
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Spot-check sheets carry real listing values (price, area, locality) for 30 properties.
+# Ilaan publishes no licence to redistribute its listings (D-14, D-23), so the sheets stay
+# local. The .meta.json provenance files carry no listing data and are committed, and the
+# accuracy result is recorded in project-log/decisions/02-acquisition.md.
+reports/*.csv
+
+# Personal working notes, not a project deliverable. LESSONS.md collects process lessons for
+# Nauman to triage into his own working instructions at project close; it records his
+# decisions and Claude's mistakes candidly, which is what makes it useful and what makes it
+# unsuitable for a public repository. Kept local, versioned by nothing — back it up separately.
+project-log/LESSONS.md

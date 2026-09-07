@@ -44,7 +44,12 @@ The brief is an assumption, not a client instruction. See `decisions/01-planning
 - Residential **houses** only
 - For-sale listings only
 - Asking price in PKR as the target
-- One-time cross-sectional snapshot
+- **A twelve-month window, not a snapshot** — amended 6 Sep 2026. Ilaan's archive spans
+  Nov 2022 to Sep 2026, but structured locality and coordinates are absent on everything
+  posted after ~Sep 2024, and posting volume collapsed after mid-2024. The usable window is
+  **2 Sep 2023 – 14 Sep 2024**. Twelve months is close enough to a cross-section to keep the
+  design, but listing date is carried through cleaning as a control, and the extrapolation
+  risk when predicting for today is disclosed in the README. See `decisions/02-acquisition.md`
 
 ## 4. Out of scope
 
@@ -134,7 +139,7 @@ pass. Every stage closes with a handoff message written for the next chat.
 | # | Stage | Planned | Milestone | Actual | Variance | Effort |
 |---|---|---|---|---|---|---|
 | 0 | Planning & setup | 1d | Thu 3 Sep | 1d — done 2 Sep | −1d | as planned |
-| 1 | Acquisition | 3d | Tue 8 Sep | | | |
+| 1 | Acquisition | 3d | Tue 8 Sep | 3d — done 7 Sep | −1d | heavy |
 | 2 | Cleaning | 2d | Thu 10 Sep | | | |
 | 3 | EDA | 2d | Mon 14 Sep | | | |
 | 4 | Feature engineering | 1.5d | Tue 15 Sep | | | |
@@ -207,7 +212,8 @@ Flagged as templates, structured as modules rather than inline code:
 lahore-house-price-model/
 ├── README.md  LICENSE  .gitignore  .env.example
 ├── pyproject.toml  uv.lock  requirements.txt
-├── config/scrape.yaml           # source, delays, city filter, targets
+├── config/scrape.yaml           # source, scope, window bounds, delays
+├── tests/                       # pytest; added stage 1 with the pytest dev dependency
 ├── data/
 │   ├── raw/                     # gitignored, immutable
 │   │   └── cache/               # gitignored, every page fetched
@@ -216,10 +222,12 @@ lahore-house-price-model/
 ├── src/lhp/
 │   ├── scrape/  fetch.py  discover.py  parse.py
 │   ├── clean.py  features.py  model.py  viz.py
-├── scripts/  run_scrape.py  run_pipeline.py
+├── scripts/  run_discover.py  run_scrape.py  run_parse.py
+│           sample_listings.py  make_spotcheck.py  export_csv.py
 ├── notebooks/  01_eda  02_features  03_modelling  04_validation
 ├── models/                      # serialised model + metadata card
 ├── reports/  figures/  technical-notes.md  findings-deck.pptx
+│           spotcheck-fields-*.csv are gitignored: they carry real listing values
 ├── app/streamlit_app.py
 ├── notes/
 └── project-log/  PLAN.md  STATE.md  BACKLOG.md  decisions/
@@ -251,6 +259,18 @@ no scraper is written for it.
 **Evaluation criteria:** terms and robots.txt permissiveness; Lahore house listing volume;
 whether location arrives structured or as free text; **whether latitude/longitude are
 exposed**; whether listing data is server-rendered.
+
+Two criteria added 6 Sep 2026, after both eliminated a candidate the original list would have
+passed:
+
+- **Enumerability.** Whether the full inventory can be reached through permitted URLs at all.
+  Graana permits its listing pages and publishes no sitemap, and paginates behind a
+  disallowed pattern — readable but impossible to enumerate. Check this *before* anything
+  else: it is a three-minute test that eliminates a source, and it killed Graana after 20
+  minutes had already been spent characterising it.
+- **Operational stability.** Repeated site-wide 502s, empty sitemap files, and a "not found"
+  template served with HTTP 200 all appeared during evaluation. A multi-day unattended scrape
+  depends on the source staying up and on responses meaning what their status code says.
 
 **Self-imposed limits, regardless of source:** 1–2s delay between requests; every page
 cached; no `/api/` paths unless the terms cover them; no paid or contact-unlock personal data.
