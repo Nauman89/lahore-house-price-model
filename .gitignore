@@ -41,3 +41,4 @@ reports/*.csv
 # decisions and Claude's mistakes candidly, which is what makes it useful and what makes it
 # unsuitable for a public repository. Kept local, versioned by nothing — back it up separately.
 project-log/LESSONS.md
+Claude outputs/
