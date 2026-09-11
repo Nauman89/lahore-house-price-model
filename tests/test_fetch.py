@@ -6,6 +6,8 @@ import gzip
 import json
 
 import pytest
+from conftest import SOFT_404, read_log
+
 from lhp.scrape.fetch import (
     DisallowedByRobots,
     FetchConfig,
@@ -14,8 +16,6 @@ from lhp.scrape.fetch import (
     RobotsPolicy,
     summarise_log,
 )
-
-from conftest import SOFT_404, read_log
 
 # Graana's real robots.txt shape, verified 5 Sep 2026: two separate "User-agent: *" groups.
 # RFC 9309 says merge them; urllib.robotparser keeps only the first and silently discards

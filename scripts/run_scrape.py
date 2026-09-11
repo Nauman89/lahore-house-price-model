@@ -32,6 +32,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import yaml
+
 from lhp.scrape.discover import redact_personal_fields
 from lhp.scrape.fetch import FetchConfig, Fetcher, FetchFailed, summarise_log
 from lhp.scrape.parse import soft_404_reason

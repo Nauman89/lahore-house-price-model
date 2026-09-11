@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 import yaml
+
 from lhp.scrape.fetch import url_key
 from lhp.scrape.parse import parse_page
 

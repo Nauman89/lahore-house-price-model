@@ -3,9 +3,9 @@
 Predicting the asking price of residential houses in Lahore from listing features —
 acquisition, cleaning, analysis, modelling and a deployed price estimator.
 
-> **Project status: Stage 2 of 8 — Cleaning complete.**
-> Delivery target: 24 September 2026. Stages are tagged as they complete
-> (`v0.1-acquisition`, `v0.2-cleaning`, …).
+> **Project status: Stage 4 of 8, feature engineering, complete.** Modelling is next.
+> Delivery target: 24 September 2026. Stages are tagged as they complete, from
+> `v0.1-acquisition` to `v0.4-features` so far.
 
 ---
 

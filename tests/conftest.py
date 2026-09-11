@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+
 from lhp.scrape.fetch import FetchConfig, Fetcher
 
 

@@ -21,6 +21,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import yaml
+
 from lhp.scrape.discover import Discoverer, redact_personal_fields
 from lhp.scrape.fetch import FetchConfig, Fetcher, summarise_log
 

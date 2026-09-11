@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from lhp.scrape.parse import parse_page, soft_404_reason
-
 from conftest import SOFT_404, listing, rsc_page
+
+from lhp.scrape.parse import parse_page, soft_404_reason
 
 
 def test_record_is_reassembled_from_split_rsc_chunks() -> None:

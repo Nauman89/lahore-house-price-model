@@ -200,8 +200,8 @@ built from monthly medians that the table above shows are confounded by mix, bak
 confounding into the target itself. **A month-of-year feature**, since twelve months cannot
 separate seasonality from trend.
 
-*Consequence for B-24, amended.* The README cannot disclose 14.1% as the market's drift: it is
-largely a mix shift. Stage 7 reports the drift the model attributes to time, the same houses
+*Consequence for B-24, amended.* The README cannot disclose 14.1% as the market's drift: part
+of it, probably a large part, is a mix shift. Stage 7 reports the drift the model attributes to time, the same houses
 priced at the window's start and at its end, with the raw 14.1% beside it only as the
 unadjusted figure and the reason it overstates.
 

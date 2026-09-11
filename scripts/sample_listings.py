@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 import yaml
+
 from lhp.scrape.discover import redact_personal_fields
 from lhp.scrape.fetch import FetchConfig, Fetcher, FetchFailed
 from lhp.scrape.parse import soft_404_reason

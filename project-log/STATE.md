@@ -2,95 +2,102 @@
 
 **Updated:** 11 Sep 2026
 
-**Active stage:** 3 — EDA · **COMPLETE**, milestone Mon 14 Sep met three days early
-**Next stage:** 4 — Feature engineering (milestone Tue 15 Sep). Runs in its own chat.
+**Active stage:** 4 · Feature engineering · **COMPLETE**, in one day, milestone Tue 15 Sep met early
+**Next stage:** 5 · Modelling (milestone Thu 17 Sep). Runs in its own chat.
 
 ## Outcome
 
-The acceptance criteria are locked (B-05 closed), and the number that locks them is the
-stage's main finding: **PLAN §5.1's own baseline scores MdAPE 10.62%** with no model in it,
-which beats the provisional accept level of 20%, the PPE20 floor of 55%, and the 15% stretch,
-all three, before anything is trained.
+The model's input is **nine columns**: five carried raw (`area_marla`, `bedrooms`, `bathrooms`,
+`latitude_clean`, `longitude_clean`), the society plus phase label, and **three engineered
+features** against PLAN §8's ceiling of 30: the smoothed locality encoding (D-62), months since
+the window opened (D-64) and the lookup estimate (D-65). All thirteen D-51 candidates were
+decided; five were dropped (`loc_phase_num`, `loc_sector`, `loc_block`, `loc_sub`, `loc_path`).
 
-`notebooks/01_eda.ipynb`, 36 cells, runs clean top to bottom and imports from `src/lhp/viz.py`.
+`src/lhp/features.py` builds the matrix; stage 5, stage 6 and the estimator share it. No
+price-derived value is written to disk: the encoding is fitted inside each training fold, out of
+fold for training rows, grouped so a possible duplicate pair never sees its twin's price.
+`notebooks/02_features.ipynb`, 8 code cells, rebuilds the evidence behind D-62 to D-67 and runs
+clean top to bottom.
 
 ### Exit criteria
 
 | Criterion | Result |
 |---|---|
-| Acceptance criteria locked and logged | D-47 levels, D-49 segment rule, D-50 segment definitions, all in `decisions/04-eda.md` |
-| Every column's distribution reviewed | All 42 profiled mechanically (D-54), each carrying an explicit disposition |
-| Every anomaly explained or logged in BACKLOG | B-18 fixed upstream (D-58), B-19 dissolved (D-59), B-20 reviewed (D-61), B-22 corrected, D-44's soft boundary confirmed (D-61) |
-| Leakage risks identified | D-51 bars nine columns on two distinct grounds; D-60 bounds the residual at 13.03% and gives the split rule that neutralises it |
-| Findings written and ready to drive feature choices | 13 candidate columns, the locality tier measured, the time drift measured |
-| STATE, BACKLOG and decisions updated; repo pushed and tagged | this file; 4 backlog items closed, 2 rewritten, 2 opened; `v0.3-eda` |
-| Handoff written for the stage 4 chat | `handoffs/04-features.md` |
+| Every feature traced to an EDA finding | Each of the nine columns names its decision and finding (D-62 to D-66; notebook section 1) |
+| Leakage checked explicitly | Import-time guard against every D-51 barred column; tests fill barred columns with random values and scramble price, and the matrix does not move; `transform` never reads price |
+| Definitional relationships verified | Smoothing checked against a hand computation; lookup estimate equals encoding plus log area; a row's own price never enters its training encoding; rows sharing a group never encode each other. Seven deliberate breaks of `features.py`, each caught by its test |
+| STATE, BACKLOG and decisions updated; repo pushed and tagged | this file; B-24 amended, B-25 and B-26 opened; `decisions/05-features.md` D-62 to D-67; `v0.4-features` |
 
-### The six findings that matter
+### The findings that matter
 
-1. **The baseline is strong and the provisional criteria were meaningless.** Median price per
-   marla by locality tier and size band, out of fold: MdAPE 10.62%, PPE10 48.5%, PPE20 72.6%
-   on the D-48 metric. Accept is now relative, at 0.90 x baseline (D-47).
-2. **The locality tier is society plus phase.** Society alone scores 12.24%, society plus
-   phase 11.47%, the full path down to block 11.50%, which is marginally worse while more
-   than doubling the levels and putting 17% of rows in levels holding under five. The block
-   tier is memorisation dressed as granularity.
-3. **The twelve-month window is not a cross-section.** Median price per marla rose 14.1% from
-   the first complete month to the last, the same order as the baseline's own error. B-03's
-   recency holdout now has a motive, and the README's extrapolation risk has a number (B-24).
-4. **B-21's collapse gap runs the opposite way to the assumption.** Listing-level scoring
-   gives 10.62% against 11.47% on group medians, because weighting by listing over-weights
-   the replicated groups and those are the easiest rows in the corpus. It reverses to 11.76%
-   once Park View Villas is excluded, which is why D-48 requires that figure beside the
-   headline.
-5. **Residual leakage is bounded at 13.03% of rows and cannot be narrowed** without using
-   price (barred, D-38) or a house-level coordinate (does not exist). The mitigation is a
-   split-time rule, not a cleaning rule: dedup on the tight key, split on a loose one (D-60,
-   B-23).
-6. **Price per marla rises with plot size**, 3.60M at five marla or less to 4.40M at 20 to 40,
-   which is the opposite of the usual small-plot premium and is almost certainly location
-   confounding. Size cannot be banded without location.
+1. **EDA's 14.1% drift is tangled with a change in mix** (D-64). The two months that bound it,
+   Oct 2023 and Aug 2024, differ most in what was listed: DHA 6.1% of rows against 32.3%, plots
+   of a kanal or more 16.5% against 37.3%. Both price higher per marla. Time therefore enters as
+   a control, held at the training data's latest date for the estimator, and the README must
+   report the drift the model attributes to time rather than the raw 14.1% (B-24, amended).
+2. **Locality is encoded, not one-hot or native**, at society plus phase: 442 levels over 6,468
+   rows, 359 of them under 20 rows. Smoothing (m = 20, tuned in stage 5) lets a thin level
+   borrow its society's value; coordinates let it borrow its neighbours'.
+3. **The text columns hold almost nothing** (D-67). Descriptions are empty at source on 98.2%;
+   titles follow one template on 94.0%; the commonest candidate signal covers 0.5% of rows.
+4. **Two upstream defects, handled two ways.** Property 579334 had no society because its
+   address was one segment; a parser rule now recovers it and exactly one row changed on the
+   re-run (D-63). Eleven descriptions hold an unresolved page-data pointer; logged, not fixed,
+   because nothing reads the column (B-25).
 
 ## What changed against the plan
 
-| Set at intake | Measured | Where |
+| Set at intake or handed over | Measured | Where |
 |---|---|---|
-| Accept MdAPE <= 20% and PPE20 >= 55%, stretch 15% | All three beaten by a lookup table before any model exists | D-47 |
-| B-21: scoring on group medians will understate the error | It overstates it. Listing-level is 0.85 points *better*, and only reverses with Park View Villas removed | D-48 |
-| PLAN §3: twelve months is close enough to a cross-section | 14.1% drift across the window | D-55 |
-| B-22: Park View City is the largest single society | Labelled Park View Villas, and largest *development* only once DHA is split into its phases. 9.7% of listings, 3.9% of rows | B-22 |
-| B-19: Rahbar prices above DHA main phases, direction wrong | A size-mix artefact. At five marla it is 4.50M against the main phases at 4.91M | D-59 |
-| B-20: ten unresolvable area conflicts | Nine reach the analysis set, and they price indistinguishably from the corpus | D-61 |
+| 14.1% drift, to be disclosed in the README (B-24) | Tangled with a shift in what was listed; stage 7 reports the model's time effect instead | D-64 |
+| 97 rows with no usable coordinate (stage 4 handoff) | 62 analysis rows, standing for 91 of 8,320 listings | D-62 |
+| 443 society plus phase levels (D-50) | 442 named; the 443rd was the one row without a society, now absorbed | D-62, D-63 |
+| `created_at` unresolved (D-51) | A control, pinned at the window's end for the estimator | D-64 |
+| PLAN §10 lists `notebooks/02_features` | Built, after the evidence was first measured in scratch code (LESSONS L-29) | this stage |
 
-## Files added or amended this stage
+## Files added or amended
 
 ```
-src/lhp/viz.py                     house style: palette, chrome, PKR formatting, figure saving
-notebooks/01_eda.ipynb             the stage's narrative, 36 cells
-reports/figures/03..07             five figures, deck resolution
-project-log/decisions/04-eda.md    D-47 to D-61
-src/lhp/clean.py                   amended: D-53 members artefact, D-58 Rahbar mapping
-scripts/run_clean.py               amended: emits listings_members
-tests/test_clean.py                169 tests, up from 160
-data/processed/listings_members.*  new artefact, 8,320 pre-collapse listings
+src/lhp/features.py                 LocalityEncoder and FeatureBuilder (D-62 to D-66)
+tests/test_features.py              30 tests: leakage and definitional relationships
+notebooks/02_features.ipynb         the stage's evidence, 8 code cells
+reports/figures/08-listing-mix-by-month.png
+src/lhp/clean.py                    amended: D-63 society recovery from the address
+tests/test_clean.py                 9 tests added; the suite is 208, up from 169
+reports/stage2-reconciliation.md    regenerated: D-63's counts
+src/lhp/viz.py                      bold titles (semibold printed a findfont warning); 3 lint fixes
+src/lhp/__init__.py, scrape/__init__.py   docstrings
+tests/*.py, scripts/*.py            import order fixed by ruff --fix (8 files, no logic change)
+scripts/check_prose.py              02_features added to the client facing list
+project-log/decisions/05-features.md  D-62 to D-67
+project-log/BACKLOG.md              B-24 amended, B-25 and B-26 opened
+project-log/handoffs/05-modelling.md
 ```
 
 ## Next action
 
-Open the stage 4 chat. Read `handoffs/04-features.md`, then `decisions/04-eda.md`, then
-BACKLOG B-21 through B-24. **The tier, the split key and `created_at` are the three decisions
-stage 4 and stage 5 inherit as evidence rather than as instructions (D-52).**
+Open the stage 5 chat. Read `handoffs/05-modelling.md` first: its first step is deciding where
+stage 5 runs, because the Cowork workspace cannot install LightGBM or CatBoost (see Known gaps).
 
 ## Blockers
 
-None. Stage 4 is unblocked and unstarted.
+None in the project. Tooling, both found 11 Sep:
+
+- The desktop bridge's shell is broken on this laptop by a Windows update released 8 Sep; the
+  tool reports the cause itself. File listing, staging and writing still work, so every write
+  is verified by re-staging and comparing checksums.
+- The Cowork cloud workspace refuses package registries ("Host not in allowlist: pypi.org")
+  even with network egress on and pypi.org added to the allowlist. Untested whether a new
+  session honours the setting.
 
 ## Known gaps
 
-- `created_at` is undecided: usable at inference only as "today", which is outside the window,
-  against a 14.1% drift. D-51 leaves it to stage 4 deliberately.
-- The 13.03% residual leakage bound cannot be reduced with the data available. B-23 carries
-  the split rule that makes it harmless.
+- B-23's loose split key is specified in words (D-60) but not yet defined; the 62 rows without
+  a coordinate need a rule inside it.
+- The D-47 baseline, 10.62%, was measured before D-63 moved one row; stage 5 re-establishes it
+  first in any case (PLAN §6).
 - B-21's disclosure obligations fall due at stage 6, and B-24's README number at stage 7.
-- Park View Villas bulk postings price about 9% below its singleton listings, not yet
-  controlled for size or block. A stage 5 weighting question. B-22.
+- Park View Villas bulk postings price about 9% below its singleton listings (B-22), a stage 5
+  weighting question.
+- `01_eda.ipynb` has 17 over-long code lines (B-26), deferred to the stage 7 notebook pass.
+  Everything else lints clean.

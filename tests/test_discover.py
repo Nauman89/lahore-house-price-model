@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 
 import pytest
+from conftest import read_log
+
 from lhp.scrape.discover import Discoverer, redact_personal_fields, slugify, write_refs
 from lhp.scrape.fetch import FetchConfig, Fetcher
-
-from conftest import read_log
 
 TOTAL = 7
 PAGE_SIZE = 3

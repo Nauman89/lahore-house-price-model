@@ -141,8 +141,8 @@ pass. Every stage closes with a handoff message written for the next chat.
 | 0 | Planning & setup | 1d | Thu 3 Sep | 1d — done 2 Sep | −1d | as planned |
 | 1 | Acquisition | 3d | Tue 8 Sep | 3d — done 7 Sep | −1d | heavy |
 | 2 | Cleaning | 2d | Thu 10 Sep | 1d — done 8 Sep | −2d | |
-| 3 | EDA | 2d | Mon 14 Sep | | | |
-| 4 | Feature engineering | 1.5d | Tue 15 Sep | | | |
+| 3 | EDA | 2d | Mon 14 Sep | done 11 Sep | −1d | as planned |
+| 4 | Feature engineering | 1.5d | Tue 15 Sep | 1d, done 11 Sep | −2d | as planned |
 | 5 | Modelling | 2d | Thu 17 Sep | | | |
 | 6 | Validation | 1d | Fri 18 Sep | | | |
 | 7 | Reporting & handover | 1.5d | Tue 22 Sep | | | |
