@@ -268,10 +268,19 @@ def resolve_area(title: object, area: object, area_unit: object) -> AreaResoluti
 
 
 def analysis_rows(frame: pd.DataFrame) -> int:
-    """Rows that will survive into the analysis set — everything not yet flagged excluded."""
+    """Rows that will survive into the analysis set.
+
+    Two flags take a row out of it and both must be honoured here, or every count from the
+    collapse onward misreports. ``excluded`` is a scope or quality drop (D-34, D-35, D-44).
+    ``collapsed`` marks a listing folded into its fingerprint group's survivor: it stays in
+    the frame so the members artefact can be written, but it is not an analysis row (D-53).
+    """
     if "excluded" not in frame.columns:
         return len(frame)
-    return int((~frame["excluded"]).sum())
+    surviving = ~frame["excluded"]
+    if "collapsed" in frame.columns:
+        surviving &= ~frame["collapsed"]
+    return int(surviving.sum())
 
 
 @dataclass
@@ -826,6 +835,62 @@ def phase_number(label: object) -> int | None:
     return _ROMAN.get(token.upper())
 
 
+#: Named sub-societies that run their own internal phase numbering inside a parent society,
+#: mapped onto the phase they actually occupy in the parent.
+#:
+#: DHA Rahbar is officially **DHA Phase 11** and numbers its own phases 1 and 2 inside that.
+#: Read literally, "Rahbar - Phase 2" therefore places a peripheral scheme in DHA's Phase 2,
+#: beside Phase 1 and Phase 3 — which is what made B-19's price comparison look wrong before
+#: plot size was held constant. Three labels denote the one place: "Rahbar - Phase 1",
+#: "Rahbar - Phase 2" and "Phase 11 - Rahbar" (B-18).
+#:
+#: This is local knowledge, not something the data could establish — the same class of
+#: correction as D-46, and recorded the same way. Nauman's call, 8 Sep 2026.
+SUB_SOCIETY_PHASES: dict[tuple[str, str], tuple[str, int]] = {
+    ("DHA", "rahbar"): ("Phase 11 - Rahbar", 11),
+}
+
+
+def canonical_phase(
+    society: object, label: object, others: object = ()
+) -> tuple[object, int | None, str | None, str | None]:
+    """Resolve a sub-society's phase label against its parent society.
+
+    Everything not named in :data:`SUB_SOCIETY_PHASES` passes through untouched with its
+    own phase number, so this costs one dictionary lookup per row and changes nothing else.
+
+    The marker is matched against the phase segment *and* against the unclassified segments,
+    because a sub-society is not always written with the word "phase" beside it. In the
+    current corpus every mention carries a phase and the second branch never fires; it is
+    there so that a re-scrape which writes "Rahbar, DHA, Lahore" is caught rather than
+    silently filed as an unclassified sub-tier.
+
+    Args:
+        society: The parent society, already canonicalised.
+        label: The phase segment, or None.
+        others: Unclassified segments, searched for the marker as a fallback.
+
+    Returns:
+        ``(phase_label, phase_number, internal_phase, matched_segment)``. ``internal_phase``
+        is the sub-society's own phase where the label states one — 11 is the DHA phase, 2 is
+        Rahbar's phase inside it, and both are facts worth keeping. ``matched_segment`` is
+        whichever segment carried the marker, so the caller can stop filing it as a sub-tier.
+    """
+    if isinstance(society, str):
+        for (parent, marker), (canonical, number) in SUB_SOCIETY_PHASES.items():
+            if society != parent:
+                continue
+            for candidate in (label, *others):
+                if not isinstance(candidate, str) or marker not in candidate.lower():
+                    continue
+                stated = phase_number(candidate)
+                # "Phase 11 - Rahbar" states the parent's phase and no internal one;
+                # "Rahbar - Phase 2" states Rahbar's own.
+                internal = f"Phase {stated}" if stated is not None and stated != number else None
+                return canonical, number, internal, candidate
+    return label, phase_number(label), None, None
+
+
 def parse_address_path(address: object, locality: object) -> dict[str, object]:
     """Decompose an address into its locality hierarchy (B-08).
 
@@ -834,6 +899,9 @@ def parse_address_path(address: object, locality: object) -> dict[str, object]:
     society. Segments are stripped of the city, province and country, the final segment is
     the society (and matches ``locality`` on 8,322 of 8,358 rows), and everything before it
     is classified by keyword.
+
+    A sub-society that numbers its own phases is resolved against its parent by
+    :func:`canonical_phase` before the path is built (B-18).
 
     Returns a dict of ``loc_society``, ``loc_phase``, ``loc_phase_num``, ``loc_block``,
     ``loc_sector``, ``loc_sub`` and ``loc_path``. Missing tiers are ``None``; no tier is
@@ -853,12 +921,18 @@ def parse_address_path(address: object, locality: object) -> dict[str, object]:
         found[_segment_kind(segment)].append(segment)
 
     phase = found["phase"][0] if found["phase"] else None
+    phase, phase_num, internal, matched = canonical_phase(society, phase, found["sub"])
+    if matched is not None and matched in found["sub"]:
+        found["sub"].remove(matched)      # it is a phase, not an unclassified tier
+    if internal is not None:
+        found["sub"].append(internal)     # the sub-society's own phase, kept not discarded
+
     path = [p for p in (society, phase, found["sector"][0] if found["sector"] else None,
                         found["block"][0] if found["block"] else None) if p]
     return {
         "loc_society": society,
         "loc_phase": phase,
-        "loc_phase_num": phase_number(phase),
+        "loc_phase_num": phase_num,
         "loc_sector": found["sector"][0] if found["sector"] else None,
         "loc_block": found["block"][0] if found["block"] else None,
         "loc_sub": " / ".join(found["sub"]) if found["sub"] else None,
@@ -881,8 +955,13 @@ def add_locality_parts(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
         sum(1 for original in out["locality"] if canonical_locality(original) != original)
     )
     analysis = out[~out["excluded"]] if "excluded" in out.columns else out
+    markers = "|".join(marker for _, marker in SUB_SOCIETY_PHASES)
+    resolved = int(
+        analysis["loc_phase"].astype("object").fillna("").str.contains(markers, case=False).sum()
+    )
     counts = {
         "locality spellings merged (B-10)": renamed,
+        "sub-society phases resolved to the parent (B-18)": resolved,
         "distinct societies": int(analysis["loc_society"].nunique()),
         "  with a phase parsed": int(analysis["loc_phase"].notna().sum()),
         "  with a sector parsed": int(analysis["loc_sector"].notna().sum()),
@@ -993,6 +1072,9 @@ SCHEMA: dict[str, str] = {
     "description": "string",
     # target
     "price": "float64",
+    # the listing's own asking price. Equal to `price` except on a collapsed group's
+    # survivor, where `price` is the group median and this is what that poster asked (D-53)
+    "price_listed": "float64",
     # area, source and cleaned
     "area": "float64",
     "area_unit": "category",
@@ -1032,6 +1114,8 @@ SCHEMA: dict[str, str] = {
     "n_listings": "Int64",
     "fp_price_median": "float64",
     "fp_price_spread": "float64",
+    # D-45's collapse, recorded rather than applied by deletion (D-53)
+    "collapsed": "bool",
 }
 
 
@@ -1074,6 +1158,16 @@ def apply_schema(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
     )
 
 
+#: The members artefact's columns. Deliberately slim: it exists to answer "which listings
+#: did this row stand for, and at what prices", and a table carrying the full feature set
+#: invites a later stage to train on it — which would put every folded listing back into the
+#: loss that D-45 removed it from. See D-53.
+MEMBER_COLUMNS: tuple[str, ...] = (
+    "property_id", "fp_group_id", "price_listed", "n_listings", "fp_price_median",
+    "collapsed", "created_at",
+)
+
+
 def write_processed(frame: pd.DataFrame, out_dir: str = "data/processed") -> dict[str, str]:
     """Split the cleaned frame into the analysis set and the excluded rows, and write both.
 
@@ -1085,6 +1179,12 @@ def write_processed(frame: pd.DataFrame, out_dir: str = "data/processed") -> dic
     * ``listings_excluded.parquet`` — the dropped rows, each carrying ``exclusion_reason``.
       Never read by the pipeline; it exists so "why is this listing not in the model" has an
       answer that does not require re-running anything.
+    * ``listings_members.parquet`` — one row per pre-collapse analysis listing, survivors and
+      folded rows alike, joined to the analysis set on ``fp_group_id``. Stage 6 expands a
+      held-out row back into the listings it stood for and scores against each of their real
+      prices, so the headline metric measures individual asking prices rather than group
+      medians (D-48). The join is only valid between two files written by the same run:
+      ``fp_group_id`` is a positional code, so a re-run renumbers it.
 
     A CSV of each is written beside it for eyeballing rows. CSV cannot carry the dtypes of
     D-39, so nothing reads it back.
@@ -1094,13 +1194,27 @@ def write_processed(frame: pd.DataFrame, out_dir: str = "data/processed") -> dic
     directory = Path(out_dir)
     directory.mkdir(parents=True, exist_ok=True)
 
-    kept = frame[~frame["excluded"]].reset_index(drop=True)
+    kept = frame[~frame["excluded"] & ~frame["collapsed"]].reset_index(drop=True)
     dropped = frame[frame["excluded"]].reset_index(drop=True)
-    if len(kept) + len(dropped) != len(frame):  # pragma: no cover — arithmetic guard
+    folded = frame[~frame["excluded"] & frame["collapsed"]]
+    members = frame[~frame["excluded"]].reset_index(drop=True)[list(MEMBER_COLUMNS)]
+
+    if len(kept) + len(dropped) + len(folded) != len(frame):  # pragma: no cover
         raise AssertionError("split lost rows")
+    # L-26: a count an artefact rests on gets a bound it cannot exceed, asserted where it is
+    # computed. One group per analysis row is what makes the D-48 join well defined; if it
+    # ever stops holding, stage 6 would silently score against the wrong listings.
+    groups_in_members = int(members["fp_group_id"].nunique(dropna=False))
+    if len(members) > len(frame) or groups_in_members != len(kept):  # pragma: no cover
+        raise AssertionError(
+            f"{len(members):,} member rows in {groups_in_members:,} groups against "
+            f"{len(kept):,} analysis rows — the stage 6 join would be wrong"
+        )
 
     written: dict[str, str] = {}
-    for name, part in (("listings", kept), ("listings_excluded", dropped)):
+    for name, part in (
+        ("listings", kept), ("listings_excluded", dropped), ("listings_members", members)
+    ):
         parquet_path = directory / f"{name}.parquet"
         csv_path = directory / f"{name}.csv"
         part.to_parquet(parquet_path, index=False)
@@ -1270,6 +1384,12 @@ def collapse_groups(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
     between them, so the group becomes one row and ``n_listings`` records how many listings
     it stood for.
 
+    The folded rows are **marked, not deleted**. They leave the analysis set through the
+    ``collapsed`` flag and stay in the frame, so :func:`write_processed` can write them to
+    ``listings_members`` — the pre-collapse listings stage 6 measures the acceptance metric
+    against (D-48). Amends D-45, which deleted them and left the one step in the pipeline
+    whose removals appeared in no artefact.
+
     Runs *after* :func:`flag_price_junk` and not before. With a group of two the median is
     the mean, so a junk price left in the group would be averaged into the survivor.
 
@@ -1285,20 +1405,40 @@ def collapse_groups(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
     sizes, medians = grouped.transform("size"), grouped.transform("median")
     spread = grouped.transform(lambda p: (p.max() - p.min()) / p.median() if p.median() else 0.0)
 
-    kept = analysis.copy()
-    kept["n_listings"] = sizes
-    kept["fp_price_median"] = medians
-    kept["fp_price_spread"] = spread
-    kept = kept.assign(_key=key.values).drop_duplicates("_key", keep="first").drop(columns="_key")
-    kept["price"] = kept["fp_price_median"]
+    members = analysis.copy()
+    # The poster's own asking price, kept before the survivor's is replaced by the group
+    # median. Without it the survivor's real price is destroyed by the collapse and the
+    # members artefact is missing exactly one listing per group — the same principle that
+    # keeps `area` beside `area_marla` and `latitude` beside `latitude_clean` (B-12).
+    members["price_listed"] = analysis["price"]
+    members["n_listings"] = sizes
+    members["fp_price_median"] = medians
+    members["fp_price_spread"] = spread
+    # The first row of each group survives; every other row of that group is folded into it.
+    members["collapsed"] = members.assign(_key=key.values).duplicated("_key", keep="first")
 
-    out = pd.concat([kept, excluded], ignore_index=True)
+    # Only a survivor takes the group median. A folded row keeps the price its own poster
+    # set — that price is what stage 6 scores the prediction against, so overwriting it
+    # would destroy the one thing the members artefact exists to preserve.
+    survivor = ~members["collapsed"]
+    members.loc[survivor, "price"] = members.loc[survivor, "fp_price_median"]
+
+    excluded = excluded.copy()
+    excluded["price_listed"] = excluded["price"]
+    excluded["collapsed"] = False
+
+    out = pd.concat([members, excluded], ignore_index=True)
+    survivors = int(survivor.sum())
+    if survivors > len(analysis):  # pragma: no cover — L-26: bound every count it can have
+        raise AssertionError(f"{survivors} survivors out of {len(analysis)} rows")
     counts = {
         "analysis rows before collapse": len(analysis),
-        "groups": len(kept),
-        "rows removed by collapse": len(analysis) - len(kept),
-        "largest group collapsed": int(sizes.max()),
-        "rows whose price is now a group median": int((kept["n_listings"] > 1).sum()),
+        "groups": survivors,
+        "rows folded into a survivor": int(members["collapsed"].sum()),
+        "largest group collapsed": int(sizes.max()) if len(analysis) else 0,
+        "rows whose price is now a group median": int(
+            (survivor & (members["n_listings"] > 1)).sum()
+        ),
     }
     return out, StepReport(
         "collapse — D-45",
@@ -1344,6 +1484,8 @@ def synthesise_sample(
 
     rng = np.random.default_rng(seed)
     real = frame[~frame["excluded"]] if "excluded" in frame.columns else frame
+    if "collapsed" in real.columns:
+        real = real[~real["collapsed"]]  # the analysis set, not the pre-collapse listings
     real = real[real["price"].notna() & real["area_marla"].notna()]
 
     # Sample the society (and its phase/block vocabulary) in proportion to real volume, so
@@ -1402,6 +1544,7 @@ def synthesise_sample(
                 "address": f"{where}, Lahore, Punjab, Pakistan",
                 "description": "",
                 "price": float(prices[i]),
+                "price_listed": float(prices[i]),
                 "area": float(areas[i]),
                 "area_unit": "marla",
                 "area_marla": float(areas[i]),
@@ -1434,6 +1577,7 @@ def synthesise_sample(
                 "n_listings": 1,
                 "fp_price_median": float(prices[i]),
                 "fp_price_spread": 0.0,
+                "collapsed": False,
             }
         )
 
@@ -1456,9 +1600,10 @@ def synthesise_sample(
             break
         for position in hits:
             sample.iloc[position, sample.columns.get_loc("price")] += 100_000.0
-            sample.iloc[position, sample.columns.get_loc("fp_price_median")] = sample.iloc[
-                position, sample.columns.get_loc("price")
-            ]
+            for mirrored in ("fp_price_median", "price_listed"):
+                sample.iloc[position, sample.columns.get_loc(mirrored)] = sample.iloc[
+                    position, sample.columns.get_loc("price")
+                ]
     if collisions_in(sample):
         raise AssertionError("synthetic rows still reproduce a real listing after repair")
     if set(sample["property_id"]) & set(frame["property_id"]):  # pragma: no cover

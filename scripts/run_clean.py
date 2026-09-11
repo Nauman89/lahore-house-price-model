@@ -8,6 +8,7 @@ Reads ``data/interim/listings.jsonl`` and writes:
 
 * ``data/processed/listings.parquet`` + ``.csv``           the analysis set
 * ``data/processed/listings_excluded.parquet`` + ``.csv``  every dropped row, with a reason
+* ``data/processed/listings_members.parquet`` + ``.csv``   pre-collapse listings, for D-48
 * ``reports/stage2-reconciliation.md``                     the run's own counts
 * ``data/sample/listings_sample.parquet`` + ``.csv``       synthetic rows, committed (D-23)
 

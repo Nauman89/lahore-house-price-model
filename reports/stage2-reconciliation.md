@@ -52,14 +52,15 @@ rows 8,459 → 8,459   ·   analysis set 8,459 → 8,358
 
 rows 8,459 → 8,459   ·   analysis set 8,358 → 8,358
 
-    locality spellings merged (B-10)       9
-    distinct societies                   378
-      with a phase parsed              2,295
-      with a sector parsed               517
-      with a block parsed              2,904
-      with no sub-tier at all          3,957
-    distinct society > phase/sector      471
-    distinct full paths                  926
+    locality spellings merged (B-10)                       9
+    sub-society phases resolved to the parent (B-18)      17
+    distinct societies                                   378
+      with a phase parsed                              2,295
+      with a sector parsed                               517
+      with a block parsed                              2,904
+      with no sub-tier at all                          3,957
+    distinct society > phase/sector                      469
+    distinct full paths                                  924
 
 ### fingerprint — B-07 / D-43
 
@@ -83,27 +84,27 @@ rows 8,459 → 8,459   ·   analysis set 8,358 → 8,320
 
 ### collapse — D-45
 
-rows 8,459 → 6,607   ·   analysis set 8,320 → 6,468
+rows 8,459 → 8,459   ·   analysis set 8,320 → 6,468
 
     analysis rows before collapse            8,320
     groups                                   6,468
-    rows removed by collapse                 1,852
+    rows folded into a survivor              1,852
     largest group collapsed                     44
     rows whose price is now a group median     895
 
 ### columns — D-37
 
-rows 6,607 → 6,607   ·   analysis set 6,468 → 6,468
+rows 8,459 → 8,459   ·   analysis set 6,468 → 6,468
 
     columns dropped                            14
     listed but NOT single-valued — KEPT         0
     single-valued but not listed — REVIEW       0
-    columns remaining                          40
+    columns remaining                          42
 
 ### dtypes — D-39
 
-rows 6,607 → 6,607   ·   analysis set 6,468 → 6,468
+rows 8,459 → 8,459   ·   analysis set 6,468 → 6,468
 
-    columns typed                            40
+    columns typed                            42
     in frame but not in schema — REVIEW       0
     in schema but not in frame — REVIEW       0

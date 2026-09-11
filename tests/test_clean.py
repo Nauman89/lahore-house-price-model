@@ -543,12 +543,12 @@ def test_junk_must_be_removed_before_the_collapse_not_after():
     result = _through_fingerprint(row(price=18_500_000.0), row(price=100_000.0))
     right_way, _ = clean.flag_price_junk(result)
     right_way, _ = clean.collapse_groups(right_way)
-    survivor = right_way[~right_way["excluded"]]
+    survivor = right_way[~right_way["excluded"] & ~right_way["collapsed"]]
     assert len(survivor) == 1
     assert survivor["price"].iloc[0] == 18_500_000.0
 
     wrong_way, _ = clean.collapse_groups(result)
-    poisoned = wrong_way[~wrong_way["excluded"]]
+    poisoned = wrong_way[~wrong_way["excluded"] & ~wrong_way["collapsed"]]
     assert poisoned["price"].iloc[0] == 9_300_000.0, "this is the failure the ordering prevents"
 
 
@@ -558,11 +558,11 @@ def test_a_group_collapses_to_one_row_at_the_median_price():
     )
     result, _ = clean.flag_price_junk(result)
     result, report = clean.collapse_groups(result)
-    survivor = result[~result["excluded"]]
+    survivor = result[~result["excluded"] & ~result["collapsed"]]
     assert len(survivor) == 1
     assert survivor["price"].iloc[0] == 21_000_000.0  # median, not mean (22M)
     assert survivor["n_listings"].iloc[0] == 3
-    assert report.counts["rows removed by collapse"] == 2
+    assert report.counts["rows folded into a survivor"] == 2
 
 
 def test_excluded_rows_are_never_collapsed():
@@ -575,6 +575,46 @@ def test_excluded_rows_are_never_collapsed():
     result, _ = clean.flag_price_junk(result)
     result, _ = clean.collapse_groups(result)
     assert int(result["excluded"].sum()) == 2
+
+
+def test_dha_rahbar_resolves_to_phase_11_and_keeps_its_own_phase():
+    """B-18: DHA Rahbar is DHA Phase 11 and numbers its own phases inside it."""
+    parsed = clean.parse_address_path("Rahbar - Phase 2, DHA, Lahore, Punjab, Pakistan", "DHA")
+    assert parsed["loc_phase"] == "Phase 11 - Rahbar"
+    assert parsed["loc_phase_num"] == 11, "2 is Rahbar's own phase, not DHA's"
+    assert parsed["loc_sub"] == "Phase 2", "the internal phase is kept, not discarded"
+    assert parsed["loc_path"] == "DHA > Phase 11 - Rahbar"
+
+
+def test_the_two_rahbar_spellings_land_on_one_place():
+    a = clean.parse_address_path("Rahbar - Phase 1, DHA, Lahore", "DHA")
+    b = clean.parse_address_path("Phase 11 - Rahbar, DHA, Lahore", "DHA")
+    assert a["loc_phase"] == b["loc_phase"] == "Phase 11 - Rahbar"
+    assert a["loc_phase_num"] == b["loc_phase_num"] == 11
+    assert a["loc_sub"] == "Phase 1"
+    assert b["loc_sub"] is None, "Phase 11 states DHA's phase, so there is no internal one"
+
+
+def test_rahbar_written_without_the_word_phase_is_still_caught():
+    """Not in the current corpus. The branch exists so a re-scrape cannot file it silently."""
+    parsed = clean.parse_address_path("Rahbar, DHA, Lahore", "DHA")
+    assert parsed["loc_phase"] == "Phase 11 - Rahbar"
+    assert parsed["loc_sub"] is None
+
+
+def test_an_ordinary_dha_phase_is_untouched():
+    parsed = clean.parse_address_path("Block EE, Phase 6, DHA, Lahore", "DHA")
+    assert parsed["loc_phase"] == "Phase 6"
+    assert parsed["loc_phase_num"] == 6
+    assert parsed["loc_block"] == "Block EE"
+    assert parsed["loc_sub"] is None
+
+
+def test_rahbar_outside_dha_is_not_rewritten():
+    """The mapping is keyed on the parent society, not on the word alone."""
+    parsed = clean.parse_address_path("Rahbar - Phase 2, Testville, Lahore", "Testville")
+    assert parsed["loc_phase"] == "Rahbar - Phase 2"
+    assert parsed["loc_phase_num"] == 2
 
 
 # --------------------------------------------------------------------------------------
@@ -635,6 +675,7 @@ def _schema_shaped_frame() -> pd.DataFrame:
         if column not in original.columns:
             original[column] = None
     original["excluded"] = False
+    original["collapsed"] = False
     return original[[c for c in clean.SCHEMA]]
 
 
@@ -692,12 +733,14 @@ def test_the_pipeline_reconciles_end_to_end(interim_file):
     path = interim_file(rows)
 
     result, reports = clean.run_cleaning(path)
-    analysis = result[~result["excluded"]]
+    analysis = result[~result["excluded"] & ~result["collapsed"]]
+    folded = result[~result["excluded"] & result["collapsed"]]
     excluded = result[result["excluded"]]
 
-    assert len(analysis) + len(excluded) == len(result)
+    assert len(analysis) + len(folded) + len(excluded) == len(result)
     assert len(excluded) == 2
     assert len(analysis) == 1, "six identical listings collapse to one row"
+    assert len(folded) == 5, "the other five are marked, not deleted (D-53)"
     assert analysis["n_listings"].iloc[0] == 6
     assert [r.step for r in reports][0].startswith("area")
     assert all(r.rows_in >= r.rows_out for r in reports)
@@ -725,11 +768,13 @@ def test_write_processed_splits_without_losing_a_row(tmp_path, interim_file):
 
     kept = pd.read_parquet(tmp_path / "listings.parquet")
     dropped = pd.read_parquet(tmp_path / "listings_excluded.parquet")
-    assert len(kept) + len(dropped) == len(result)
+    folded = result[~result["excluded"] & result["collapsed"]]
+    assert len(kept) + len(dropped) + len(folded) == len(result)
     assert not kept["excluded"].any()
+    assert not kept["collapsed"].any()
     assert dropped["excluded"].all()
     assert dropped["exclusion_reason"].str.len().gt(0).all()
-    assert set(written) == {"listings", "listings_excluded"}
+    assert set(written) == {"listings", "listings_excluded", "listings_members"}
 
 
 def test_the_processed_table_round_trips_through_parquet_unchanged(tmp_path, interim_file):
@@ -737,7 +782,7 @@ def test_the_processed_table_round_trips_through_parquet_unchanged(tmp_path, int
     path = interim_file([row(property_id=900001 + i, bedrooms=3 + i) for i in range(4)])
     result, _ = clean.run_cleaning(path)
     clean.write_processed(result, str(tmp_path))
-    kept = result[~result["excluded"]].reset_index(drop=True)
+    kept = result[~result["excluded"] & ~result["collapsed"]].reset_index(drop=True)
     back = clean.read_processed(str(tmp_path / "listings.parquet"))
     assert (back.dtypes == kept.dtypes).all()
     assert back.equals(kept)
@@ -759,6 +804,57 @@ def test_an_all_null_category_survives_a_round_trip_through_read_processed(tmp_p
 
     typed = clean.read_processed(str(tmp_path / "listings.parquet"))
     assert str(typed["loc_phase"].dtype) == "category"
+
+
+def test_a_folded_row_keeps_its_own_price_while_the_survivor_takes_the_median(interim_file):
+    """D-48 scores against the price each poster actually set, so it must survive intact."""
+    prices = [20_000_000.0, 21_000_000.0, 25_000_000.0]
+    path = interim_file([row(property_id=900001 + i, price=p) for i, p in enumerate(prices)])
+    result, _ = clean.run_cleaning(path)
+
+    survivor = result[~result["excluded"] & ~result["collapsed"]]
+    folded = result[~result["excluded"] & result["collapsed"]]
+    assert len(survivor) == 1
+    assert survivor["price"].iloc[0] == 21_000_000.0, "survivor carries the group median"
+    assert survivor["price_listed"].iloc[0] == 20_000_000.0, "its own asking price survives"
+    assert sorted(folded["price_listed"]) == [21_000_000.0, 25_000_000.0]
+    assert set(folded["fp_group_id"]) == set(survivor["fp_group_id"])
+    # The whole point of the artefact: all three posted prices are still recoverable.
+    analysis = result[~result["excluded"]]
+    assert sorted(analysis["price_listed"]) == prices
+
+
+def test_the_members_artefact_expands_every_analysis_row_into_its_listings(tmp_path,
+                                                                          interim_file):
+    """The stage 6 join: one analysis row, one group, every listing it stood for."""
+    rows = [row(property_id=900001 + i, price=20_000_000.0 + i * 500_000) for i in range(4)]
+    rows.append(row(property_id=900100, bedrooms=6))          # its own group
+    rows.append(row(property_id=900101, bedrooms=0))          # excluded, never a member
+    path = interim_file(rows)
+
+    result, _ = clean.run_cleaning(path)
+    clean.write_processed(result, str(tmp_path))
+    kept = pd.read_parquet(tmp_path / "listings.parquet")
+    members = pd.read_parquet(tmp_path / "listings_members.parquet")
+
+    assert list(members.columns) == list(clean.MEMBER_COLUMNS)
+    assert sorted(members["price_listed"]) == [
+        18_000_000.0,   # the lone bedrooms=6 listing, its own group of one
+        20_000_000.0, 20_500_000.0, 21_000_000.0, 21_500_000.0,   # the group of four
+    ]
+    assert len(members) == 5, "every pre-collapse analysis listing, excluded rows aside"
+    assert 900101 not in set(members["property_id"])
+    assert members["fp_group_id"].nunique() == len(kept)
+    assert set(kept["fp_group_id"]) == set(members["fp_group_id"])
+    sizes = members.groupby("fp_group_id").size()
+    assert sizes.to_dict() == kept.set_index("fp_group_id")["n_listings"].to_dict()
+
+
+def test_analysis_rows_counts_neither_excluded_nor_collapsed(interim_file):
+    path = interim_file([row(property_id=900001 + i) for i in range(3)])
+    result, _ = clean.run_cleaning(path)
+    assert clean.analysis_rows(result) == 1
+    assert len(result) == 3, "the other two are still in the frame"
 
 
 # --------------------------------------------------------------------------------------
