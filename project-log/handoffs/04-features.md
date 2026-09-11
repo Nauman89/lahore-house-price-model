@@ -1,7 +1,14 @@
 Stage 4 — Feature engineering. Lahore House Price Model.
 
-Read first: project-log/PLAN.md, STATE.md, BACKLOG.md, decisions/01-planning.md,
-decisions/02-acquisition.md, decisions/03-cleaning.md, decisions/04-eda.md.
+Read first: CLAUDE.md at the repository root, then project-log/PLAN.md, STATE.md, BACKLOG.md,
+decisions/01-planning.md, decisions/02-acquisition.md, decisions/03-cleaning.md,
+decisions/04-eda.md.
+
+CLAUDE.md holds the writing rules, the attribution convention and the working constraints. It
+is the source of record for all three: where this handoff repeats it and the two disagree,
+CLAUDE.md wins. Read it even if your tooling claims to have loaded it, because a session that
+misses it writes prose in the wrong register and puts a Claude trailer on a commit, and neither
+failure announces itself.
 
 Stage 3 complete, milestone met three days early. Tag v0.3-eda.
 
@@ -40,6 +47,15 @@ EXIT CRITERIA (PLAN §6)
 
 STOPPING RULE
 30 engineered features or 1.5 days, whichever comes first. PLAN §8.
+
+That is a ceiling, not a quota. Thirty is the point at which work halts, not a number to reach:
+the exit criterion is that EVERY feature traces to an EDA finding, so a feature nothing in
+stage 3 points at does not get built, and finishing at eleven features is a clean pass.
+
+Whether a feature earns its place cannot be settled here. No model exists yet, and judging
+features by their effect on a model is the hit and trial this process exists to avoid. Stage 4
+asks whether a feature is justified by evidence. Stage 5 asks whether it contributes, through
+SHAP and ablation against the §5.1 baseline, and drops what does not.
 
 THE THREE DECISIONS WAITING FOR YOU
 1. THE LOCALITY TIER. Society scores MdAPE 12.24% on the §5.1 baseline, society plus phase
