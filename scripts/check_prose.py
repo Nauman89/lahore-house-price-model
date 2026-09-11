@@ -28,7 +28,10 @@ import sys
 from pathlib import Path
 
 #: What a reader meets. Everything else in the repo is internal (CLAUDE.md section 2).
-CLIENT_FACING = ("README.md", "reports/technical-notes.md", "notebooks/01_eda.ipynb")
+CLIENT_FACING = (
+    "README.md", "reports/technical-notes.md", "notebooks/01_eda.ipynb",
+    "notebooks/02_features.ipynb",
+)
 
 #: American spellings that turn up in this kind of writing. Not exhaustive, and not meant to
 #: be: it catches the ones that actually recur.

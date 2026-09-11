@@ -107,7 +107,10 @@ def use_house_style() -> None:
         "axes.labelcolor": INK_SECONDARY,
         "axes.titlecolor": INK,
         "axes.titlesize": 13,
-        "axes.titleweight": "semibold",
+        # Bold, not semibold: the default fonts on Windows and Linux carry no semibold face,
+        # so matplotlib fell back to bold anyway and printed a findfont warning into every
+        # notebook that drew a title (found in 02_features, 11 Sep 2026).
+        "axes.titleweight": "bold",
         "axes.titlelocation": "left",
         "axes.titlepad": 10,
         "axes.labelsize": 10,
@@ -169,7 +172,8 @@ def annotate(
         title: Names what is plotted.
         subtitle: One line stating what it shows. This is the sentence that ends up on
             the slide.
-        xlabel / ylabel: Axis labels. Omit where the tick labels already say it.
+        xlabel: The x axis label. Omit where the tick labels already say it.
+        ylabel: The y axis label, on the same rule.
         source: A provenance line set below the axes, e.g. the row count and window.
         grid_axis: ``"y"``, ``"x"`` or ``"both"``. Gridlines belong on the value axis;
             a grid across the category axis is noise.
@@ -183,7 +187,7 @@ def annotate(
     if title:
         ax.text(
             0.0, 1.10 if subtitle else 1.02, title, transform=ax.transAxes, ha="left",
-            va="bottom", fontsize=13, fontweight="semibold", color=INK,
+            va="bottom", fontsize=13, fontweight="bold", color=INK,
         )
     if subtitle:
         ax.text(
@@ -234,11 +238,11 @@ def label_bars(
         if index not in keep:
             continue
         if horizontal:
-            x, y, ha, va = patch.get_width(), patch.get_y() + patch.get_height() / 2, "left", "center"
-            offset = (4, 0)
+            x, y = patch.get_width(), patch.get_y() + patch.get_height() / 2
+            ha, va, offset = "left", "center", (4, 0)
         else:
-            x, y, ha, va = patch.get_x() + patch.get_width() / 2, patch.get_height(), "center", "bottom"
-            offset = (0, 4)
+            x, y = patch.get_x() + patch.get_width() / 2, patch.get_height()
+            ha, va, offset = "center", "bottom", (0, 4)
         ax.annotate(
             fmt.format(value), (x, y), textcoords="offset points", xytext=offset,
             ha=ha, va=va, fontsize=9, color=INK_SECONDARY,
