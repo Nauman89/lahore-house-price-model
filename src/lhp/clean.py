@@ -21,6 +21,7 @@ The stage 2 pipeline, in order. ``run_cleaning`` runs all of it.
 3.  D-33 — null coordinates that fall outside Lahore; never impute one.
 4.  D-34, D-35 — flag rows that leave the analysis set, each with a reason.
 5.  B-08 / B-10 — decompose the locality hierarchy; canonicalise locality spellings.
+    D-63 — recover the society from the address where ``locality`` is missing.
 6.  B-07 / D-43 — build the dedup fingerprint.
 7.  B-09 / D-44 — flag price junk. Before the collapse, never after.
 8.  D-45 — collapse each fingerprint group to one row at the median price.
@@ -35,6 +36,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -793,12 +795,18 @@ _ROMAN = {
 
 _PHASE_NUM_RE = re.compile(r"phase\s+(\d+|[ivx]+)\b", re.IGNORECASE)
 
+#: A tier label in its bare form, "PHASE 6" or "block ee". Used only to tidy a label
+#: recovered from inside another segment (D-63); anything more elaborate, such as
+#: "Phase 9 - Town", does not match and passes through verbatim.
+_BARE_TIER_RE = re.compile(r"^(phase|sector|block)\s+(\d+|[a-z]+)$", re.IGNORECASE)
+
 
 def canonical_locality(name: object) -> str | None:
     """Map a locality spelling onto its canonical form (B-10). Unknown names pass through.
 
     Anything that is not a string — one in-scope row has no locality at all — returns
-    ``None``, so a missing society never reaches the path builder as a float NaN.
+    ``None``, so a missing society never reaches the path builder as a float NaN. That row
+    gets its society back from the address instead (D-63, :func:`society_from_address`).
     """
     if not isinstance(name, str):
         return None
@@ -833,6 +841,62 @@ def phase_number(label: object) -> int | None:
     if token.isdigit():
         return int(token)
     return _ROMAN.get(token.upper())
+
+
+def _tidy_tier_label(label: str) -> str:
+    """Write a bare tier label the way the corpus writes it: "Phase 6", "Block EE".
+
+    Applied only to a label recovered from inside another segment (D-63), which arrives in
+    whatever case the poster typed. A label parsed from its own segment is left verbatim, as
+    D-40 requires, so this cannot rename any existing level.
+    """
+    stripped = label.strip()
+    match = _BARE_TIER_RE.match(stripped)
+    if not match:
+        return stripped
+    keyword, token = match.groups()
+    return f"{keyword.capitalize()} {token.upper()}"
+
+
+def society_from_address(
+    segments: list[str], known_societies: Collection[str]
+) -> tuple[str | None, list[str]]:
+    """Recover the society from the address when ``locality`` is missing (D-63).
+
+    One in-scope row has no ``locality`` and a one-segment address, "DHA PHASE 6", which
+    the path builder would otherwise file as a phase belonging to no society. A segment that
+    starts with a known society name, as a whole word, yields that society; the rest of the
+    segment is kept as its tier and tidied by :func:`_tidy_tier_label`.
+
+    Deliberately conservative:
+
+    * the rest of the segment must be empty or a phase, sector or block, so "Model Town
+      Link Road" does not become Model Town with a sub-tier made out of a road name;
+    * the longest matching name wins, so a society called "DHA City" is not read as DHA;
+    * ``known_societies`` are the corpus's own ``locality`` values, so nothing is guessed
+      from outside the data.
+
+    Args:
+        segments: Address segments, already stripped of city, province and country.
+        known_societies: Canonical society names to match against.
+
+    Returns:
+        ``(society, segments)``: the recovered society or None, and the segments with the
+        matched one replaced by its tier, or removed when nothing followed the name.
+    """
+    names = sorted(known_societies, key=len, reverse=True)
+    for index, segment in enumerate(segments):
+        lowered = segment.lower()
+        for name in names:
+            prefix = name.lower()
+            if lowered != prefix and not lowered.startswith(prefix + " "):
+                continue
+            rest = segment[len(name):].strip(" -")
+            if rest and _segment_kind(rest) == "sub":
+                continue
+            tier = [_tidy_tier_label(rest)] if rest else []
+            return name, segments[:index] + tier + segments[index + 1:]
+    return None, segments
 
 
 #: Named sub-societies that run their own internal phase numbering inside a parent society,
@@ -891,7 +955,9 @@ def canonical_phase(
     return label, phase_number(label), None, None
 
 
-def parse_address_path(address: object, locality: object) -> dict[str, object]:
+def parse_address_path(
+    address: object, locality: object, known_societies: Collection[str] = ()
+) -> dict[str, object]:
     """Decompose an address into its locality hierarchy (B-08).
 
     Ilaan's ``address`` is an ordered path from most specific to least — "Block EE, Phase 4,
@@ -900,17 +966,27 @@ def parse_address_path(address: object, locality: object) -> dict[str, object]:
     the society (and matches ``locality`` on 8,322 of 8,358 rows), and everything before it
     is classified by keyword.
 
+    The society comes from ``locality``. Where that is missing, and only then, it is
+    recovered from the address against ``known_societies`` (D-63). A present ``locality`` is
+    never overridden.
+
     A sub-society that numbers its own phases is resolved against its parent by
     :func:`canonical_phase` before the path is built (B-18).
 
     Returns a dict of ``loc_society``, ``loc_phase``, ``loc_phase_num``, ``loc_block``,
-    ``loc_sector``, ``loc_sub`` and ``loc_path``. Missing tiers are ``None``; no tier is
-    invented and none is collapsed into another, because which granularity carries price
-    signal is an EDA question, not a cleaning one.
+    ``loc_sector``, ``loc_sub`` and ``loc_path``, plus ``society_from_address``, True where
+    D-63 supplied the society. Missing tiers are ``None``; no tier is invented and none is
+    collapsed into another, because which granularity carries price signal is an EDA
+    question, not a cleaning one.
     """
     society = canonical_locality(locality)
     segments = [s.strip() for s in str(address).split(",")]
     segments = [s for s in segments if s.lower() not in _ADDRESS_NOISE]
+
+    recovered = False
+    if society is None and known_societies:
+        society, segments = society_from_address(segments, known_societies)
+        recovered = society is not None
 
     # The trailing segment repeats the society when present; drop it so only sub-tiers remain.
     if segments and canonical_locality(segments[-1]) == society:
@@ -937,19 +1013,31 @@ def parse_address_path(address: object, locality: object) -> dict[str, object]:
         "loc_block": found["block"][0] if found["block"] else None,
         "loc_sub": " / ".join(found["sub"]) if found["sub"] else None,
         "loc_path": " > ".join(path) if path else None,
+        "society_from_address": recovered,
     }
 
 
 def add_locality_parts(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
-    """Add the decomposed locality columns. ``locality`` and ``address`` are left as parsed."""
+    """Add the decomposed locality columns. ``locality`` and ``address`` are left as parsed.
+
+    The vocabulary D-63 recovers a missing society from is the frame's own canonical
+    ``locality`` values, taken over every row the frame holds, so it is the data's list of
+    societies and nothing external. A row whose society was recovered carries the
+    ``loc_society_from_address`` flag.
+    """
     out = frame.copy()
+    known = {name for name in map(canonical_locality, out["locality"]) if name is not None}
     parsed = [
-        parse_address_path(address, locality)
+        parse_address_path(address, locality, known)
         for address, locality in zip(out["address"], out["locality"], strict=True)
     ]
     for column in ("loc_society", "loc_phase", "loc_phase_num", "loc_sector", "loc_block",
                    "loc_sub", "loc_path"):
         out[column] = [row[column] for row in parsed]
+    out["clean_flags"] = _merge_flags(
+        out,
+        [("loc_society_from_address",) if row["society_from_address"] else () for row in parsed],
+    )
 
     renamed = int(
         sum(1 for original in out["locality"] if canonical_locality(original) != original)
@@ -962,6 +1050,10 @@ def add_locality_parts(frame: pd.DataFrame) -> tuple[pd.DataFrame, StepReport]:
     counts = {
         "locality spellings merged (B-10)": renamed,
         "sub-society phases resolved to the parent (B-18)": resolved,
+        "society recovered from the address, locality missing (D-63)": int(
+            has_flag(analysis["clean_flags"], "loc_society_from_address").sum()
+        ),
+        "  still without a society": int(analysis["loc_society"].isna().sum()),
         "distinct societies": int(analysis["loc_society"].nunique()),
         "  with a phase parsed": int(analysis["loc_phase"].notna().sum()),
         "  with a sector parsed": int(analysis["loc_sector"].notna().sum()),

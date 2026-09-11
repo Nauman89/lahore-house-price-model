@@ -450,6 +450,82 @@ def test_a_missing_locality_does_not_crash_the_path_builder():
     assert parsed["loc_path"] is None
 
 
+# D-63: the society is recovered from the address only where `locality` is missing.
+
+_KNOWN = {"Testville", "Testville City", "Model Town", "DHA"}
+
+
+def test_a_missing_locality_recovers_the_society_from_the_address():
+    parsed = clean.parse_address_path("TESTVILLE PHASE 3", None, _KNOWN)
+    assert parsed["loc_society"] == "Testville"
+    assert parsed["loc_phase"] == "Phase 3", "tidied to the spelling the corpus uses"
+    assert parsed["loc_phase_num"] == 3
+    assert parsed["loc_path"] == "Testville > Phase 3"
+    assert parsed["society_from_address"] is True
+
+
+def test_a_recovered_phase_lands_on_the_same_level_as_a_parsed_one():
+    """The point of the rule: the row joins its real level instead of forming its own."""
+    recovered = clean.parse_address_path("DHA PHASE 6", None, _KNOWN)
+    parsed = clean.parse_address_path("Phase 6, DHA, Lahore", "DHA", _KNOWN)
+    for column in ("loc_society", "loc_phase", "loc_phase_num", "loc_path"):
+        assert recovered[column] == parsed[column], column
+
+
+def test_recovery_never_turns_a_road_name_into_a_tier():
+    parsed = clean.parse_address_path("Model Town Link Road, Lahore", None, _KNOWN)
+    assert parsed["loc_society"] is None
+    assert parsed["society_from_address"] is False
+
+
+def test_the_longest_society_name_wins():
+    parsed = clean.parse_address_path("Testville City Block C", None, _KNOWN)
+    assert parsed["loc_society"] == "Testville City"
+    assert parsed["loc_block"] == "Block C"
+
+
+def test_a_society_name_must_match_as_a_whole_word():
+    parsed = clean.parse_address_path("Testvilleton Phase 1", None, _KNOWN)
+    assert parsed["loc_society"] is None
+
+
+def test_a_bare_society_name_recovers_with_no_tier():
+    parsed = clean.parse_address_path("Model Town, Lahore, Pakistan", None, _KNOWN)
+    assert parsed["loc_society"] == "Model Town"
+    assert parsed["loc_path"] == "Model Town"
+
+
+def test_a_present_locality_is_never_overridden():
+    parsed = clean.parse_address_path("DHA Phase 6, Testville, Lahore", "Testville", _KNOWN)
+    assert parsed["loc_society"] == "Testville"
+    assert parsed["society_from_address"] is False
+
+
+def test_an_elaborate_recovered_label_passes_through_verbatim():
+    """Only a bare "PHASE 6" shape is tidied; anything else is kept as written (D-40)."""
+    parsed = clean.parse_address_path("Testville Phase 9 - Town", None, _KNOWN)
+    assert parsed["loc_society"] == "Testville"
+    assert parsed["loc_phase"] == "Phase 9 - Town"
+
+
+def test_recovery_is_flagged_counted_and_leaves_the_source_columns_alone():
+    result, _ = clean.add_area_marla(
+        frame(row(), row(locality=None, address="TESTVILLE PHASE 3"))
+    )
+    result, _ = clean.add_clean_coordinates(result)
+    result, _ = clean.apply_exclusions(result)
+    result, report = clean.add_locality_parts(result)
+    assert result["loc_society"].tolist() == ["Testville", "Testville"]
+    assert clean.has_flag(result["clean_flags"], "loc_society_from_address").tolist() == [
+        False,
+        True,
+    ]
+    assert pd.isna(result["locality"].iloc[1]), "the source value is never rewritten"
+    assert result["address"].iloc[1] == "TESTVILLE PHASE 3"
+    assert report.counts["society recovered from the address, locality missing (D-63)"] == 1
+    assert report.counts["  still without a society"] == 0
+
+
 @pytest.mark.parametrize(
     ("label", "expected"),
     [
